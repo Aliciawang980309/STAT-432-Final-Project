@@ -19,6 +19,8 @@ library(ggplot2)
 library(knitr)
 library(kableExtra)
 library(tidyverse)
+library(car)
+library(randomForest)
 ```
 
 ```{r}
@@ -94,10 +96,37 @@ plot_9 = bank_new %>%
 plot_10 = bank_new %>%
   ggplot(aes(x = previous, fill = y)) + 
   geom_bar()
-
-
 ```
 
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
 gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9, plot_10)
 ```
+
+
+```{r}
+bank_num = bank
+bank_num[,] <- sapply(bank[,], as.numeric)
+```
+
+```{r}
+rf = randomForest(y ~ ., data = bank)
+```
+
+```{r}
+rf$importance
+```
+
+```{r}
+cor(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")])
+```
+
+```{r}
+pca = prcomp(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m")], center = TRUE, scale = TRUE)
+plot(pca, type = "line")
+as.matrix(pca$rotation[,1])
+mat = scale(as.matrix(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")]))
+
+```
+
+
+
