@@ -49,6 +49,16 @@ bank_tst = bank_new[-idx, ]
 ```
 
 ```{r}
+bank_num = read.csv("bank-additional.csv")
+bank_num[,] <- sapply(bank[,], as.numeric)
+heatmap(x = as.matrix(bank_num))
+#install.packages("car")
+library(car)
+full_model = lm(y ~ ., data = bank_num)
+vif(full_model)
+```
+
+```{r}
 names(bank_trn)
 plot_1 = bank_new %>%
   ggplot(aes(x = age, col = job)) + 
@@ -95,7 +105,17 @@ plot_10 = bank_new %>%
   ggplot(aes(x = previous, fill = y)) + 
   geom_bar()
 
+plot_11 = bank_new %>%
+  ggplot(aes(x = emp.var.rate, y = euribor3m)) +
+  geom_point()
 
+plot_12 = bank_new %>%
+  ggplot(aes(x = emp.var.rate, y = nr.employed)) +
+  geom_point()
+
+plot_13 = bank_new %>%
+  ggplot(aes(x = euribor3m, y = nr.employed)) +
+  geom_point()
 ```
 
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
