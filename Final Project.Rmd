@@ -33,3 +33,19 @@ mean(bank$education == "unknown")
 1 + 1
 ```
 
+```{r}
+bank_full = read.csv("bank-additional-full.csv")
+table(bank_full$job)
+table(bank_full$education == "unknown")
+table(bank_full$marital  == "unknown")
+table(bank_full$default  == "unknown")
+table(bank_full$housing  == "unknown")
+table(bank_full$loan  == "unknown")
+table(bank_full$y)
+```
+
+```{r}
+bank_full %>% 
+  filter(bank_full$job != "unknown" & bank_full$marital != "unknown" & bank_full$education != "unknown" & bank_full$loan != "unknown" & bank_full$housing != "unknown")
+```
+
