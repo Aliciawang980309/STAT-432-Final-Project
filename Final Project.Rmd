@@ -22,7 +22,7 @@ library(tidyverse)
 ```
 
 ```{r}
-bank = read.csv("bank-additional-full.csv")
+bank = read.csv("bank-additional.csv")
 ```
 
 ```{r}
@@ -42,7 +42,7 @@ bank_new = bank_full %>%
 ```
 
 ```{r}
-set.seed(42)
+#set.seed(42)
 idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
 bank_trn = bank_new[idx, ]
 bank_tst = bank_new[-idx, ]
@@ -79,35 +79,16 @@ plot_7 = bank_new %>%
   ggplot(aes(x = y, fill = education)) + 
   geom_bar() + 
   facet_wrap(~job)
+
+plot_8 = bank_new %>%
+  ggplot(aes(x = y, fill = education)) + 
+  geom_bar()
+
+plot_9 = bank_new %>%
+  ggplot(aes(x = y, fill = job)) + 
+  geom_bar()
 ```
 
-<<<<<<< HEAD
-```{r, print-eda-plots, fig.height = 20, fig.width = 17}
-gridExtra::grid.arrange(plot_1, plot_2, plot_3)
-```
-
-```{r}
-
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-=======
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
-gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7)
+gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9)
 ```
->>>>>>> 915b02c16bc602b8175cf85ece99d5ab8b20435d
