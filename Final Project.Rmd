@@ -22,6 +22,6 @@ library(tidyverse)
 ```
 
 ```{r}
-bank = read_csv("bank-additional.csv")
+bank = read.csv("bank-additional.csv")
 ```
 
