@@ -141,17 +141,71 @@ rf = randomForest(y ~ ., data = bank)
 rf$importance
 ```
 
-```{r}
-cor(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")])
+```{r pca}
+pca = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], center = TRUE, scale = TRUE)
+# mat = scale(as.matrix(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")]))
+```
+
+```{r pca scree}
+evals = pca$sdev ^ 2
+ggplot(mapping = aes(x = 1:length(pca$sdev), y = pca$sdev ^ 2 / sum(pca$sdev ^ 2))) +
+  geom_line(color = "turquoise3", size = 1.5) + 
+  geom_point(size = 5, color = "tomato", shape = 18) +
+  xlab("Number of PCs") +
+  ylab("Variance") + 
+  ggtitle("Scree Plot")
+```
+
+```{r pca loading, fig.height = 7, fig.width = 7}
+# function to create a circle
+circle = function(center = c(0, 0), npoints = 100) {
+    r = 1
+    tt = seq(0, 2 * pi, length = npoints)
+    xx = center[1] + r * cos(tt)
+    yy = center[1] + r * sin(tt)
+    return(data.frame(x = xx, y = yy))
+}
+
+corcir = circle(c(0, 0), npoints = 100)
+
+# create data frame with correlations between variables and PCs
+correlations = as.data.frame(cor(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], pca$x))
+
+# data frame with arrows coordinates
+arrows = data.frame(x1 = c(0, 0, 0, 0, 0), y1 = c(0, 0, 0, 0, 0), x2 = correlations$PC1, 
+    y2 = correlations$PC2)
+
+# geom_path will do open circles
+ggplot() +
+  geom_path(data = corcir, aes(x = x, y = y), colour = "turquoise3") + 
+  geom_segment(data = arrows, aes(x = x1, y = y1, xend = x2, yend = y2), colour = "turquoise3") + 
+  geom_text(data = correlations, aes(x = PC1, y = PC2, label = rownames(correlations)), color = "tomato") + 
+  geom_hline(yintercept = 0, colour = "gray65") +
+  geom_vline(xintercept = 0, colour = "gray65") +
+  xlim(-1.1, 1.1) +
+  ylim(-1.1, 1.1) +
+  labs(x = "pc1 aixs", y = "pc2 axis") +
+  ggtitle("Circle of correlations")
+```
+
+```{r pca transform}
+pca1 = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
+trans = pca1$rotation[, 1]
+bank = bank %>%
+  mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
+  select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
+bank_full = bank_full %>%
+  mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
+  select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
 ```
 
 ```{r}
-pca = prcomp(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m")], center = TRUE, scale = TRUE)
-plot(pca, type = "line")
-as.matrix(pca$rotation[,1])
-mat = scale(as.matrix(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")]))
-
+histogram(bank_full$econ.idx, breaks = 100)
 ```
+
+
+
+
 
 
 
