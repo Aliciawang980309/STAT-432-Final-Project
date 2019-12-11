@@ -42,7 +42,7 @@ bank_new = bank_full %>%
 ```
 
 ```{r}
-set.seed(42)
+#set.seed(42)
 idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
 bank_trn = bank_new[idx, ]
 bank_tst = bank_new[-idx, ]
