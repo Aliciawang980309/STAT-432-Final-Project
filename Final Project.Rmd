@@ -45,7 +45,35 @@ table(bank_full$y)
 ```
 
 ```{r}
-bank_full %>% 
+bank_new = bank_full %>% 
   filter(bank_full$job != "unknown" & bank_full$marital != "unknown" & bank_full$education != "unknown" & bank_full$loan != "unknown" & bank_full$housing != "unknown")
 ```
 
+```{r}
+set.seed(42)
+idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
+bank_trn = bank_new[idx, ]
+bank_tst = bank_new[-idx, ]
+```
+
+```{r}
+names(bank_trn)
+plot_1 = bank_new %>%
+  ggplot(aes(x = age, col = job)) + 
+  geom_density()
+
+plot_2 = bank_new %>%
+  ggplot(aes(x = education, fill = education)) + 
+  geom_bar() + 
+  facet_wrap(~housing)
+
+
+
+plot_3 = bank_new %>%
+  ggplot(aes(x = euribor3m, y = month, color = y)) + 
+  geom_point()
+```
+
+```{r, print-eda-plots, fig.height = 10, fig.width = 17}
+gridExtra::grid.arrange(plot_1, plot_2, plot_3)
+```
