@@ -25,14 +25,6 @@ library(tidyverse)
 bank = read.csv("bank-additional-full.csv")
 ```
 
-```{r 2}
-mean(bank$education == "unknown")
-```
-
-```{r add}
-1 + 1
-```
-
 ```{r}
 bank_full = read.csv("bank-additional-full.csv")
 table(bank_full$job)
@@ -67,13 +59,32 @@ plot_2 = bank_new %>%
   geom_bar() + 
   facet_wrap(~housing)
 
-
-
 plot_3 = bank_new %>%
   ggplot(aes(x = euribor3m, y = month, color = y)) + 
   geom_point()
 ```
 
-```{r, print-eda-plots, fig.height = 10, fig.width = 17}
+```{r, print-eda-plots, fig.height = 20, fig.width = 17}
 gridExtra::grid.arrange(plot_1, plot_2, plot_3)
 ```
+
+```{r}
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
