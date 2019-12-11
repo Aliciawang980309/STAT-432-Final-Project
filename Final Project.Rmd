@@ -79,8 +79,16 @@ plot_7 = bank_new %>%
   ggplot(aes(x = y, fill = education)) + 
   geom_bar() + 
   facet_wrap(~job)
+
+plot_8 = bank_new %>%
+  ggplot(aes(x = y, fill = education)) + 
+  geom_bar()
+
+plot_9 = bank_new %>%
+  ggplot(aes(x = y, fill = job)) + 
+  geom_bar()
 ```
 
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
-gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7)
+gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9)
 ```
