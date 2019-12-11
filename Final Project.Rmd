@@ -49,7 +49,7 @@ bank_tst = bank_new[-idx, ]
 ```
 
 ```{r}
-names(bank_trn)
+#names(bank_trn)
 plot_1 = bank_new %>%
   ggplot(aes(x = age, col = job)) + 
   geom_density()
@@ -60,27 +60,10 @@ plot_2 = bank_new %>%
   facet_wrap(~housing)
 
 plot_3 = bank_new %>%
-  ggplot(aes(x = cons.conf.idx, y = cons.price.idx, color = y)) + 
+  ggplot(aes(x = duration, y = education, color = y)) + 
   geom_point()
-
-plot_4 = bank_new %>%
-  ggplot(aes(x = age, col = loan)) + 
-  geom_density()
-
-plot_5 = bank_new %>%
-  ggplot(aes(x = age, col = month)) + 
-  geom_density()
-
-plot_6 = bank_new %>%
-  ggplot(aes(x = age, col = contact)) + 
-  geom_density()
-
-plot_7 = bank_new %>%
-  ggplot(aes(x = y, fill = education)) + 
-  geom_bar() + 
-  facet_wrap(~job)
 ```
 
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
-gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7)
+gridExtra::grid.arrange(plot_1, plot_2, plot_3)
 ```
