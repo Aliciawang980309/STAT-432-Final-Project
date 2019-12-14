@@ -26,6 +26,7 @@ library(car)
 library(randomForest)
 library(car)
 library(e1071)
+library(glmnet)
 ```
 
 ```{r}
@@ -181,20 +182,7 @@ plot_13 = bank_new %>%
 gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9, plot_10)
 ```
 
-```{r}
-bank_num = bank_full
-bank_num[,] <- sapply(bank_full[,], as.numeric)
-```
-
-```{r}
-rf = randomForest(y ~ ., data = bank_full)
-```
-
-```{r}
-rf$importance
-```
-
-```{r}
+```{r correlation}
 cor(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
 ```
 
@@ -245,7 +233,7 @@ ggplot() +
   ggtitle("Circle of correlations")
 ```
 
-```{r transform}
+```{r data-transform}
 bank_new_full = bank_full %>%
   filter(
       bank_full$job != "unknown" &
@@ -253,6 +241,7 @@ bank_new_full = bank_full %>%
       bank_full$education != "unknown" &
       bank_full$loan != "unknown" & bank_full$housing != "unknown") %>%
   select(-c("cons.price.idx", "euribor3m", "nr.employed"))
+
 bank_new = bank %>%
   filter(
       bank$job != "unknown" &
@@ -262,101 +251,29 @@ bank_new = bank %>%
   select(-c("cons.price.idx", "euribor3m", "nr.employed"))
 ```
 
-```{r}
-#set.seed(42)
+```{r data-splitting}
 idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
 bank_trn = bank_new[idx, ]
 bank_tst = bank_new[-idx, ]
+
 idx = createDataPartition(bank_new_full$y, p = 0.8, list = FALSE)
 bank_trn_full = bank_new_full[idx, ]
 bank_tst_full = bank_new_full[-idx, ]
 ```
 
-```{r}
-names(bank_new)
-```
-
-```{r}
-levels(bank_new_full$marital)
-```
-
-```{r}
+```{r model-matrix}
 bank_trn_full_x = model.matrix(y ~ ., data = bank_trn_full)[, -1]
 bank_tst_full_x = model.matrix(y ~ ., data = bank_tst_full)[, -1]
 ```
-
-```{r}
-nb1 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "Sens")
-```
-
-```{r}
-cm1 = confusionMatrix(predict(nb1, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-nb2 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary))
-```
-
-```{r}
-cm2 = confusionMatrix(predict(nb2, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-nb3 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "Spec")
-```
-
-```{r}
-cm3 = confusionMatrix(predict(nb3, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-nb4 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "ROC")
-```
-
-```{r}
-cm4 = confusionMatrix(predict(nb4, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-##############################################
-
-```{r}
-library(glmnet)
-
-bank_trn_full_x = model.matrix(y ~ ., data = bank_trn_full)[, -1]
-bank_tst_full_x = model.matrix(y ~ ., data = bank_tst_full)[, -1]
-
-cv.modelfull_lasso = cv.glmnet(bank_trn_full_x, as.numeric(bank_trn_full$y), alpha=1, family = "binomial")
-
-pred = as.factor(ifelse(predict(cv.modelfull_lasso, bank_tst_full_x, type = "response") > 0.5, "yes", "no"))
-
-confusionMatrix(data = pred, reference = bank_tst_full$y, positive = "yes")
-```
-
-#####################################################
 
 ```{r, cv-control-binary}
-cv_binary = trainControl(
+tc_cv = trainControl(
   method = "cv",
   number = 5,
   classProbs = TRUE,
   summaryFunction = twoClassSummary)
 
-cv_binary_up = trainControl(
+tc_cv_up = trainControl(
   method = "cv",
   number = 5,
   classProbs = TRUE,
@@ -364,117 +281,125 @@ cv_binary_up = trainControl(
   sampling = "up")
 ```
 
-```{r, echo = TRUE}
-set.seed(42)
-bin_mod_rf = train(
+```{r Naive-Bayes}
+mod_nb_up = train(y ~ ., data = bank_trn_full, 
+                  method = "naive_bayes",
+                  trControl = tc_cv_up,
+                  metric = "ROC")
+```
+
+```{r confusionMatrix}
+cm_nb_up = confusionMatrix(predict(mod_nb_up, bank_tst_full, type = "raw"), 
+                           bank_tst_full$y, positive = "no")
+```
+
+```{r cv.glmnet}
+mod_lasso = cv.glmnet(bank_trn_full_x, as.numeric(bank_trn_full$y), alpha=1, family = "binomial")
+```
+
+```{r confusionMatrix}
+pred_lasso = as.factor(ifelse(predict(mod_lasso, bank_tst_full_x, type = "response") > 0.5, "yes", "no"))
+cm_lasso = confusionMatrix(data = pred_lasso, reference = bank_tst_full$y, positive = "no")
+```
+
+```{r random-forest}
+mod_rf_cv = train(
   form = y ~ ., 
   data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary,
+  method = "rf",
+  trControl = tc_cv,
   metric = "ROC",
   tuneLength = 20
 )
 ```
 
-```{r, echo = TRUE}
-set.seed(42)
-bin_mod_rf_up = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_up,
-  metric = "ROC",
-  tuneLength = 20
-)
-```
-
-```{r}
-confusionMatrix(data = predict(bin_mod_rf, bank_tst, type = "raw"),
+```{r confusionMatrix}
+cm_rf_cv = confusionMatrix(data = predict(mod_rf_cv, bank_tst, type = "raw"),
                 reference = bank_tst$y,
                 positive = "no")
 ```
 
-```{r}
-confusionMatrix(data = predict(bin_mod_rf_up, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
+```{r random-forest-up}
+mod_rf_cv_up = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "ranger",
+  trControl = tc_cv_up,
+  metric = "ROC",
+  tuneLength = 20
+)
 ```
 
-```{r}
-cv_binary_oob = trainControl(
+```{r confusionMatrix}
+cm_rf_cv_up = confusionMatrix(data = predict(mod_rf_cv_up, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r oob-control-binary}
+tc_oob = trainControl(
   method = "oob")
 
-cv_binary_oob_up = trainControl(
+tc_oob_up = trainControl(
   method = "oob",
   sampling = "up")
 ```
 
-```{r}
-set.seed(42)
-bin_mod_rf_oob = train(
+```{r oob-random-forest}
+mod_rf_oob = train(
   form = y ~ ., 
   data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_oob,
+  method = "rf",
+  trControl = tc_oob,
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_oob = confusionMatrix(data = predict(mod_rf_oob, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r oob-up-random-forest}
+mod_rf_oob_up = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "rf",
+  trControl = tc_oob_up,
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_oob_up = confusionMatrix(data = predict(mod_rf_oob_up, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r knn_up_model}
+mod_knn_cv_up = train(
+  y ~ ., data = bank_trn, 
+  method = "knn", 
+  trControl = tc_cv_up, 
+  metric = "ROC",
   tuneLength = 20
 )
 ```
 
 ```{r}
-confusionMatrix(data = predict(bin_mod_rf_oob, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
-```
-
-```{r}
-set.seed(42)
-bin_mod_rf_oob_up = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_oob_up,
-  tuneLength = 20
-)
-```
-
-```{r}
-confusionMatrix(data = predict(bin_mod_rf_oob_up, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
-```
-
-##############################################
-
-
-```{r samping = up, metric = roc}
-set.seed(42)
-ctrl <- trainControl(method="cv",
-                     number = 5, 
-                     sampling = "up",
-                     classProbs=TRUE,
-                     summaryFunction = twoClassSummary
-                     )
-knnFit4 <- train(y ~ ., data = bank_trn, 
-                method = "knn", 
-                trControl = ctrl, 
-                metric = "ROC",
-                preProcess = c("center","scale"),
-                tuneLength = 20)
-knnFit4
-
-confusionMatrix(data = predict(knnFit4, bank_tst), 
-                    reference = bank_tst$y, positive = "no")
+cm_knn_up = confusionMatrix(data = predict(mod_knn_cv_up, bank_tst), 
+                            reference = bank_tst$y, positive = "no")
 ```
 
 ```{r up_sampling, accuracy}
-set.seed(42)
-ctrl <- trainControl(method="cv",
+ctrl = trainControl(method="cv",
                      number = 5, 
                      sampling = "up"
                      #classProbs=TRUE,
                      #summaryFunction = twoClassSummary
                      )
-knnFit2 <- train(y ~ ., data = bank_trn, 
+knnFit2 = train(y ~ ., data = bank_trn, 
                 method = "knn", 
                 trControl = ctrl, 
                 preProcess = c("center","scale"),
@@ -507,13 +432,13 @@ confusionMatrix(data = predict(knnFit5, bank_tst),
 ```
 ```{r, no sampling, accuracy}
 set.seed(42)
-ctrl <- trainControl(method="cv",
+ctrl = trainControl(method="cv",
                      number = 5
                      #sampling = "smote"
                      #classProbs = TRUE,
                      #summaryFunction = twoClassSummary
                      )
-knnFit6 <- train(y ~ ., data = bank_trn, 
+knnFit6 = train(y ~ ., data = bank_trn, 
                 method = "knn", 
                 trControl = ctrl,
                 preProcess = c("center","scale"),
