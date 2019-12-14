@@ -1,6 +1,6 @@
 ---
 title: "Top 1 Group Final Project"
-author: "Hao Wang (haow12), Qiuning Ge (qiuning2), Chenhan Xu (chenhan2), and Zhongyu Wu (zhongyu6)"
+author: "Qiuning Ge (qiuning2), Hao Wang (haow12), Zhongyu Wu (zhongyu6), Chenhan Xu (chenhan2)"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
   html_document: 
@@ -10,7 +10,7 @@ output:
 urlcolor: BrickRed
 ---
 
-```{r setup, include=FALSE}
+```{r, setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = 'center')
 ```
 
@@ -26,6 +26,9 @@ library(car)
 library(randomForest)
 library(car)
 library(e1071)
+library(glmnet)
+library(DT)
+library(magrittr)
 ```
 
 ```{r}
@@ -36,19 +39,31 @@ theme_set(theme_light())
 
 # Abstract
 
-> ABS
+> Statistical learning methods were applied to the bank marketing campaigns (phone call) of a
+Portuguese banking institution. And the goal of this analysis is to detect if 
+the client will subscribe a term deposit (variable y). A variety of learning 
+techniques were explored and validated. Simple machine learning methods like logistic regression, 
+random forest and k nearest neighbor method are used, especially given their computational 
+efficiency at test time. Despite the size of the available data, due to the probablilty of the subscription,
+a much larger dataset should be better for using to train models before being put into use. 
 
 ***
 
 # Introduction
 
-INTRO
+Bank marketing is called to develop a distinctive brand image which is considered the capital-reputation of the financial institution. The role of marketing will be the formulation of a coherent strategy against the proliferation of channels of distribution and customer segments. Banking service providers have expanded the range of services they have traditionally offered to customers.[^1] The expanded services now include deposit, credit card, personal loan, business loan etc.. The purpose of bank marketing is that the bank strives to improve customer satisfaction with the bank by providing customers with high-quality, efficient, and personalized services, thereby maintaining customers' loyalty to the bank and establishing long-term relationships with the bank. Therefore, through this project which is about direct marketing campaign of a bank institution from Portuguese, our purpose is to efficiently predict if the client would accept to subscribe a term deposit or not based on the clients, social and economic and other information.
+
+A customer-based concentration of statistical analysis on banking services facilitates understanding of the possible effects of various banking resources. Multiple characteristics of consumers are now examinable to determine the possibility of purchasing financial services. To construct a system to predict the subscription of deposit, statistical learning techniques have been applied to a dataset containing thousands of Bank Marketing. The results show potential for such a system to be used to screen all subscription of deposit, especially given that the dataset utilized is a fraction of what would be available to major financial institutions.
 
 ***
 
 # Methods
 
 ## Data
+
+The data used for this analysis contains direct marketing campaigns of a Portuguese banking institution from May 2008 to November 2010. The data was accessed through UCI Machine Repository.
+
+There are 33987 observations that clients did not subscribe a term deposit and 4258 observations that clients subscribed a term deposit. Therefore, the data is highly imbalanced, with unsuccessful campaigns accounting for 88.87%.
 
 ```{r}
 bank = read.csv("bank-additional.csv")
@@ -58,9 +73,374 @@ bank = read.csv("bank-additional.csv")
 bank_full = read.csv("bank-additional-full.csv")
 ```
 
+### Data Preprocessing
+
+```{r}
+summary(bank_full)
+```
+
+```{r}
+data.frame(job = table(bank_full$job)["unknown"], marital = table(bank_full$marital)["unknown"], education = table(bank_full$education)["unknown"], default = table(bank_full$default)["unknown"], loan = table(bank_full$loan)["unknown"], month = table(bank_full$month)["unknown"]) %>%
+  kable(caption = "Number of Missing Value in Each Columns with Possible Missing") %>%
+  kable_styling(bootstrap_options = "striped")
+```
+
+A brief look at the full dataset shows that there may be missing value in columns `job`, `marital`, `education`, `default`, `housing`, `loan` and `month`. A further exploration showed in the table above suggests that there are actually no missing values in `month`, but all other columns listed above have. The `default` column has relative a large amount of "unknown" in the dataset; therefore, instead of simplying removing these na's, we may take this "unknown"s as another level of `default`. For other columns, `unknown`s are removed.
+
+By checking the columns in the dataset, we also notice that there are multiple columns related to the macro economy environment: `emp.var.rate`, `cons.price.idx`, `cons.conf.idx`, `euribor3m` and `nr.employed`. To identify the relation among these features, we look at the correlation matrix of them.
+
+```{r correlation}
+corr_matrix = cor(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")])
+corr_matrix %>%
+  kable(caption = "Correlation Matrix") %>%
+  kable_styling(bootstrap_options = "bordered", full_width = FALSE)
+```
+
+The correlation matrix suggests that `emp.var.rate`, `cons.price.idx`, `euribor3m` and `nr.employed` are highly correlated, with correlation coefficients more than 0.5. Moreover, we noticed that the feature `emp.var.rate` has extremely high correlation coefficients with `euribor3m` and `nr.employed`; that is, it can excellently explain the patterns of these two variables On the contrast, `cons.conf.idx` has relatively small correlation with other four variables.
+
+To further explore the relation of these five economy indices and to validate our assumption given above, we perform a Principal Component Analysis (PCA).
+
+```{r pca}
+pca = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], center = TRUE, scale = TRUE)
+```
+
+```{r pca scree}
+evals = pca$sdev ^ 2
+ggplot(mapping = aes(x = 1:length(pca$sdev), y = pca$sdev ^ 2 / sum(pca$sdev ^ 2))) +
+  geom_line(color = "turquoise3", size = 1.5) + 
+  geom_point(size = 5, color = "tomato", shape = 18) +
+  xlab("Number of PCs") +
+  ylab("Variance") + 
+  ggtitle("Scree Plot")
+```
+
+The Scree Plot shows that the first two PC expains up to 90% of total variance of the entire data. This supports our assumption that the economy indices can be grouped into two groups. To get detailed grouping of these indices, we create a loading plot of our variables.
+
+```{r pca loading, fig.height = 7, fig.width = 7}
+# function to create a circle
+circle = function(center = c(0, 0), npoints = 100) {
+    r = 1
+    tt = seq(0, 2 * pi, length = npoints)
+    xx = center[1] + r * cos(tt)
+    yy = center[1] + r * sin(tt)
+    return(data.frame(x = xx, y = yy))
+}
+
+corcir = circle(c(0, 0), npoints = 100)
+
+# create data frame with correlations between variables and PCs
+correlations = as.data.frame(cor(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], pca$x))
+
+# data frame with arrows coordinates
+arrows = data.frame(x1 = c(0, 0, 0, 0, 0), y1 = c(0, 0, 0, 0, 0), x2 = correlations$PC1, 
+    y2 = correlations$PC2)
+
+# geom_path will do open circles
+ggplot() +
+  geom_path(data = corcir, aes(x = x, y = y), colour = "turquoise3") + 
+  geom_segment(data = arrows, aes(x = x1, y = y1, xend = x2, yend = y2), colour = "turquoise3") + 
+  geom_text(data = correlations, aes(x = PC1, y = PC2, label = rownames(correlations)), color = "tomato") + 
+  geom_hline(yintercept = 0, colour = "gray65") +
+  geom_vline(xintercept = 0, colour = "gray65") +
+  xlim(-1.1, 1.1) +
+  ylim(-1.1, 1.1) +
+  labs(x = "pc1 aixs", y = "pc2 axis") +
+  ggtitle("Circle of correlations") + 
+  theme()
+```
+
+The loading plot presents two clusters of variables: the first cluster consists of `cons.price.idx`, `nr.employed`, `emp.var.rate` and `euribor3m`; the second cluster consists of `cons.conf.idx`. This is exactly what we assumed based on the correlation matrix. Therefore, since `cons.conf.idx` is an "outlier" of these variables, we keep it in the model seperately. The other four variables, however, tend to share large similarity in general. By checking their correlation coefficients, we decided to keep the `emp.var.rate` and remove the other three variables.
+
+Combined both data size reduction and data dimension reduction, we update the `bank` and `bank_full` data frames with no missing value and less economy indices.
+
+```{r data-transform}
+bank_new_full = bank_full %>%
+  filter(
+      bank_full$job != "unknown" &
+      bank_full$marital != "unknown" &
+      bank_full$education != "unknown" &
+      bank_full$loan != "unknown" & bank_full$housing != "unknown") %>%
+  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
+
+bank_new = bank %>%
+  filter(
+      bank$job != "unknown" &
+      bank$marital != "unknown" &
+      bank$education != "unknown" &
+      bank$loan != "unknown" & bank$housing != "unknown") %>%
+  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
+```
+
+As this analysis mainly focuses on supervised learning, we divide the data into two partitions: 80% of data fall in the train data and 20% of data fall in the test data. Further model tuning and selection will be done based on train data and final test will be done on the test data.
+
+Note: For Naive Bayesian model and Logistic Regression model, we create model matrices for both train and test data.
+
+```{r data-splitting}
+idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
+bank_trn = bank_new[idx, ]
+bank_tst = bank_new[-idx, ]
+
+idx = createDataPartition(bank_new_full$y, p = 0.8, list = FALSE)
+bank_trn_full = bank_new_full[idx, ]
+bank_tst_full = bank_new_full[-idx, ]
+```
+
+```{r model-matrix}
+bank_trn_full_x = model.matrix(y ~ ., data = bank_trn_full)[, -1]
+bank_tst_full_x = model.matrix(y ~ ., data = bank_tst_full)[, -1]
+```
+
 ## Modeling
 
-MODEL
+```{r, cv-control-binary}
+tc_cv = trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary)
+
+tc_cv_up = trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  summaryFunction = twoClassSummary,
+  sampling = "up")
+```
+
+```{r}
+mod_nb = train(y ~ ., data = bank_trn_full, 
+                  method = "naive_bayes",
+                  trControl = tc_cv,
+                  metric = "ROC")
+```
+
+```{r Naive-Bayes-up}
+mod_nb_up = train(y ~ ., data = bank_trn_full, 
+                  method = "naive_bayes",
+                  trControl = tc_cv_up,
+                  metric = "ROC")
+```
+
+```{r confusionMatrix}
+cm_nb_up = confusionMatrix(predict(mod_nb_up, bank_tst_full, type = "raw"), 
+                           bank_tst_full$y, positive = "no")
+```
+
+```{r cv.glmnet}
+mod_lasso = cv.glmnet(bank_trn_full_x, as.numeric(bank_trn_full$y), alpha=1, family = "binomial")
+```
+
+```{r confusionMatrix}
+pred_lasso_min = as.factor(ifelse(predict(mod_lasso, bank_trn_full_x,
+                                      s = mod_lasso$lambda.min,
+                                      type = "response") > 0.5, "yes", "no"))
+
+pred_lasso_1se = as.factor(ifelse(predict(mod_lasso, bank_trn_full_x,
+                                      s = mod_lasso$lambda.1se,
+                                      type = "response") > 0.5, "yes", "no"))
+
+cm_lasso_min = confusionMatrix(data = pred_lasso_min, 
+                               reference = bank_trn_full$y, 
+                               positive = "no")
+
+cm_lasso_1se = confusionMatrix(data = pred_lasso_1se, 
+                               reference = bank_trn_full$y, 
+                               positive = "no")
+
+roc_min = as.numeric(auc(roc(response = as.numeric(bank_trn_full$y),
+                   predictor = as.numeric(as.factor(predict(mod_lasso, bank_trn_full_x,
+                                      s = mod_lasso$lambda.min,
+                                      type = "class"))))))
+
+roc_1se = as.numeric(auc(roc(response = as.numeric(bank_trn_full$y),
+                   predictor = as.numeric(as.factor(predict(mod_lasso, bank_trn_full_x,
+                                      s = mod_lasso$lambda.1se,
+                                      type = "class"))))))
+```
+
+```{r random-forest}
+mod_rf_cv = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "rf",
+  trControl = tc_cv,
+  metric = "ROC",
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_cv = confusionMatrix(data = predict(mod_rf_cv, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r final-random-forest}
+final_rf_cv = randomForest(y ~ ., data = bank_trn_full,
+                         mtry = 12, ntree = 500)
+```
+
+```{r random-forest-up}
+mod_rf_cv_up = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "rf",
+  trControl = tc_cv_up,
+  metric = "ROC",
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_cv_up = confusionMatrix(data = predict(mod_rf_cv_up, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r final-random-forest-up}
+final_rf_cv_up = randomForest(y ~ ., data = bank_trn_full,
+                         mtry = 9, ntree = 500)
+```
+
+```{r oob-control-binary}
+tc_oob = trainControl(
+  method = "oob")
+
+tc_oob_up = trainControl(
+  method = "oob",
+  sampling = "up")
+```
+
+```{r oob-random-forest}
+mod_rf_oob = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "rf",
+  trControl = tc_oob,
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_oob = confusionMatrix(data = predict(mod_rf_oob, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r final-oob-random-forest}
+final_rf_oob = randomForest(y ~ ., data = bank_trn_full,
+                         mtry = 9, ntree = 500)
+```
+
+```{r oob-up-random-forest}
+mod_rf_oob_up = train(
+  form = y ~ ., 
+  data = bank_trn,
+  method = "rf",
+  trControl = tc_oob_up,
+  tuneLength = 20
+)
+```
+
+```{r confusionMatrix}
+cm_rf_oob_up = confusionMatrix(data = predict(mod_rf_oob_up, bank_tst, type = "raw"),
+                reference = bank_tst$y,
+                positive = "no")
+```
+
+```{r final-oob-up-random-forest}
+final_rf_oob_up = randomForest(y ~ ., data = bank_trn_full,
+                         mtry = 12, ntree = 500)
+```
+
+```{r final cm rf}
+confusionMatrix(data = final_rf_oob$predicted,
+                reference = as.factor(bank_trn_full$y),
+                positive = "no")
+as.numeric(auc(roc(response = as.numeric(bank_trn_full$y),
+                   predictor = ifelse(final_rf_oob$predicted == "no", 1, 2))))
+```
+
+```{r final cm rf up}
+confusionMatrix(data = final_rf_oob_up$predicted,
+                reference = as.factor(bank_trn_full$y),
+                positive = "no")
+as.numeric(auc(roc(response = as.numeric(bank_trn_full$y),
+                   predictor = ifelse(final_rf_oob_up$predicted == "no", 1, 2))))
+```
+
+```{r knn_up_model}
+mod_knn_cv_up = train(
+  y ~ ., data = bank_trn, 
+  method = "knn", 
+  trControl = tc_cv_up, 
+  metric = "ROC",
+  tuneLength = 20
+)
+```
+
+```{r}
+cm_knn_up = confusionMatrix(data = predict(mod_knn_cv_up, bank_tst), 
+                            reference = bank_tst$y, positive = "no")
+```
+
+```{r up_sampling, accuracy}
+ctrl = trainControl(method="cv",
+                     number = 5, 
+                     sampling = "up"
+                     #classProbs=TRUE,
+                     #summaryFunction = twoClassSummary
+                     )
+knnFit2 = train(y ~ ., data = bank_trn, 
+                method = "knn", 
+                trControl = ctrl, 
+                preProcess = c("center","scale"),
+                tuneLength = 20)
+knnFit2
+
+confusionMatrix(data = predict(knnFit2, bank_tst), 
+                    reference = bank_tst$y, positive = "no")
+```
+
+```{r, sampling = smote, accuracy}
+set.seed(42)
+ctrl <- trainControl(method="cv",
+                     number = 5, 
+                     sampling = "smote"
+                     #classProbs = TRUE,
+                     #summaryFunction = twoClassSummary
+                     )
+knnFit5 <- train(y ~ ., data = bank_trn, 
+                method = "knn", 
+                trControl = ctrl,
+                preProcess = c("center","scale"),
+                tuneLength = 20)
+knnFit5
+
+
+confusionMatrix(data = predict(knnFit5, bank_tst), 
+                    reference = bank_tst$y, positive = "no")
+```
+
+```{r, no sampling, accuracy}
+set.seed(42)
+ctrl = trainControl(method="cv",
+                     number = 5
+                     #sampling = "smote"
+                     #classProbs = TRUE,
+                     #summaryFunction = twoClassSummary
+                     )
+knnFit6 = train(y ~ ., data = bank_trn, 
+                method = "knn", 
+                trControl = ctrl,
+                preProcess = c("center","scale"),
+                tuneLength = 20)
+knnFit6
+
+
+confusionMatrix(data = predict(knnFit6, bank_tst), 
+                    reference = bank_tst$y, positive = "no")
+```
 
 ### Evaluation
 
@@ -74,7 +454,38 @@ CLASSIFICATION
 
 # Results
 
-RESULTS
+The table below shows the result of bank term deposit subscription on the training data using random forest model, logistic regression model, Naive Bayes model and KNN model with an up-sampling procedure to combat the effect of the massive class imbalance. According to the table, the KKN model with up-sampling method performs best in all of the three aspects, which are ROC, sensitivity and specificity. Additional intermediate tuning results can be found in the appendix.
+
+Models were tuned for ROC, but sensitivity and specificity were also considering when choosing the final model. Aside from the KNN model with up-sampling, all models had similar performance.
+
+```{r result}
+tibble(
+  "Model" = c("Random Forest", 
+              "Random Forest",
+              "Logistic Regression(LASSO)",
+              "Logistic Regression(LASSO)", 
+              "Naive Bayes",
+              "Up-sampling Naive Bayes",
+              "KNN",
+              "Up-sampling KNN"),
+  "Tuning" = c("mtry = 9", 
+               "mtry = 12",
+               "lambda.min = 0.000632", 
+               "lambda.1se = 0.004460",
+               "userkernel = TRUE",
+               "userkernel = TRUE",
+               "k = 43",
+               "k = 43"),
+  "ROC" = c(0.7493078, 0.7491606, 0.6861675, 0.6615718, 
+            0.88027, 0.8790954, 0.8445759, 0.894313),
+  "Sensitivity" = c(0.9586, 0.9583, 0.9751, 0.9772, 
+                    1, 0.993527, 0.9634057, 0.8315557),
+  "Specificity" = c(0.5401, 0.5401, 0.3974, 0.3663, 
+                    0, 0.1540976, 0.3877341, 0.8045224)
+) %>% 
+  kable(digits = 4, caption = "Model Result Table") %>% 
+  kable_styling("striped", full_width = FALSE)
+```
 
 ***
 
@@ -181,343 +592,6 @@ plot_13 = bank_new %>%
 gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9, plot_10)
 ```
 
-```{r}
-rf = randomForest(y ~ ., data = bank_full)
-```
-
-```{r}
-rf$importance
-```
-
-```{r}
-cor(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
-```
-
-```{r pca}
-pca = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], center = TRUE, scale = TRUE)
-# mat = scale(as.matrix(bank[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")]))
-```
-
-```{r pca scree}
-evals = pca$sdev ^ 2
-ggplot(mapping = aes(x = 1:length(pca$sdev), y = pca$sdev ^ 2 / sum(pca$sdev ^ 2))) +
-  geom_line(color = "turquoise3", size = 1.5) + 
-  geom_point(size = 5, color = "tomato", shape = 18) +
-  xlab("Number of PCs") +
-  ylab("Variance") + 
-  ggtitle("Scree Plot")
-```
-
-```{r pca loading, fig.height = 7, fig.width = 7}
-# function to create a circle
-circle = function(center = c(0, 0), npoints = 100) {
-    r = 1
-    tt = seq(0, 2 * pi, length = npoints)
-    xx = center[1] + r * cos(tt)
-    yy = center[1] + r * sin(tt)
-    return(data.frame(x = xx, y = yy))
-}
-
-corcir = circle(c(0, 0), npoints = 100)
-
-# create data frame with correlations between variables and PCs
-correlations = as.data.frame(cor(bank_full[, c("emp.var.rate", "cons.price.idx", "cons.conf.idx", "euribor3m", "nr.employed")], pca$x))
-
-# data frame with arrows coordinates
-arrows = data.frame(x1 = c(0, 0, 0, 0, 0), y1 = c(0, 0, 0, 0, 0), x2 = correlations$PC1, 
-    y2 = correlations$PC2)
-
-# geom_path will do open circles
-ggplot() +
-  geom_path(data = corcir, aes(x = x, y = y), colour = "turquoise3") + 
-  geom_segment(data = arrows, aes(x = x1, y = y1, xend = x2, yend = y2), colour = "turquoise3") + 
-  geom_text(data = correlations, aes(x = PC1, y = PC2, label = rownames(correlations)), color = "tomato") + 
-  geom_hline(yintercept = 0, colour = "gray65") +
-  geom_vline(xintercept = 0, colour = "gray65") +
-  xlim(-1.1, 1.1) +
-  ylim(-1.1, 1.1) +
-  labs(x = "pc1 aixs", y = "pc2 axis") +
-  ggtitle("Circle of correlations")
-```
-
-```{r transform}
-bank_new_full = bank_full %>%
-  filter(
-      bank_full$job != "unknown" &
-      bank_full$marital != "unknown" &
-      bank_full$education != "unknown" &
-      bank_full$loan != "unknown" & bank_full$housing != "unknown") %>%
-  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
-bank_new = bank %>%
-  filter(
-      bank$job != "unknown" &
-      bank$marital != "unknown" &
-      bank$education != "unknown" &
-      bank$loan != "unknown" & bank$housing != "unknown") %>%
-  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
-```
-
-```{r}
-#set.seed(42)
-idx = createDataPartition(bank_new$y, p = 0.8, list = FALSE)
-bank_trn = bank_new[idx, ]
-bank_tst = bank_new[-idx, ]
-idx = createDataPartition(bank_new_full$y, p = 0.8, list = FALSE)
-bank_trn_full = bank_new_full[idx, ]
-bank_tst_full = bank_new_full[-idx, ]
-```
-
-```{r}
-names(bank_new)
-```
-
-```{r}
-levels(bank_new_full$marital)
-```
-
-```{r}
-bank_trn_full_x = model.matrix(y ~ ., data = bank_trn_full)[, -1]
-bank_tst_full_x = model.matrix(y ~ ., data = bank_tst_full)[, -1]
-```
-
-```{r}
-nb1 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "Sens")
-```
-
-```{r}
-cm1 = confusionMatrix(predict(nb1, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-mod_nb = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5,
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "ROC")
-```
-
-```{r}
-cm_nb = confusionMatrix(predict(mod_nb, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-mod_nb_smote = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "smote",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "ROC")
-```
-
-```{r}
-cm_nb_smote = confusionMatrix(predict(mod_nb_smote, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-nb4 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary),
-           metric = "ROC")
-```
-
-```{r}
-cm4 = confusionMatrix(predict(nb4, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-##############################################
-
-```{r}
-library(glmnet)
-
-bank_trn_full_x = model.matrix(y ~ ., data = bank_trn_full)[, -1]
-bank_tst_full_x = model.matrix(y ~ ., data = bank_tst_full)[, -1]
-
-cv.modelfull_lasso = cv.glmnet(bank_trn_full_x, as.numeric(bank_trn_full$y), alpha=1, family = "binomial")
-
-pred = as.factor(ifelse(predict(cv.modelfull_lasso, bank_tst_full_x, type = "response") > 0.5, "yes", "no"))
-
-confusionMatrix(data = pred, reference = bank_tst_full$y, positive = "yes")
-```
-
-#####################################################
-
-```{r, cv-control-binary}
-cv_binary = trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE,
-  summaryFunction = twoClassSummary)
-
-cv_binary_up = trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE,
-  summaryFunction = twoClassSummary,
-  sampling = "up")
-```
-
-```{r, echo = TRUE}
-set.seed(42)
-rf_mod = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary,
-  metric = "ROC",
-  tuneLength = 20
-)
-```
-
-```{r, echo = TRUE}
-set.seed(42)
-rf_mod_up = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_up,
-  metric = "ROC",
-  tuneLength = 20
-)
-```
-
-```{r}
-confusionMatrix(data = predict(rf_mod, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "no")
-```
-
-```{r}
-confusionMatrix(data = predict(rf_mod_up, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
-```
-
-```{r}
-cv_binary_oob = trainControl(
-  method = "oob")
-
-cv_binary_oob_up = trainControl(
-  method = "oob",
-  sampling = "up")
-```
-
-```{r}
-set.seed(42)
-rf_mod_oob = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_oob,
-  tuneLength = 20
-)
-```
-
-```{r}
-confusionMatrix(data = predict(bin_mod_rf_oob, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
-```
-
-```{r}
-set.seed(42)
-bin_mod_rf_oob_up = train(
-  form = y ~ ., 
-  data = bank_trn,
-  method = "ranger",
-  trControl = cv_binary_oob_up,
-  tuneLength = 20
-)
-```
-
-```{r}
-confusionMatrix(data = predict(bin_mod_rf_oob_up, bank_tst, type = "raw"),
-                reference = bank_tst$y,
-                positive = "yes")
-```
-
-##############################################
 
 
-```{r samping = up, metric = roc}
-set.seed(42)
-ctrl <- trainControl(method="cv",
-                     number = 5, 
-                     sampling = "up",
-                     classProbs=TRUE,
-                     summaryFunction = twoClassSummary
-                     )
-knnFit4 <- train(y ~ ., data = bank_trn, 
-                method = "knn", 
-                trControl = ctrl, 
-                metric = "ROC",
-                preProcess = c("center","scale"),
-                tuneLength = 20)
-knnFit4
-
-confusionMatrix(data = predict(knnFit4, bank_tst), 
-                    reference = bank_tst$y, positive = "no")
-```
-
-```{r up_sampling, accuracy}
-set.seed(42)
-ctrl <- trainControl(method="cv",
-                     number = 5, 
-                     sampling = "up"
-                     #classProbs=TRUE,
-                     #summaryFunction = twoClassSummary
-                     )
-knnFit2 <- train(y ~ ., data = bank_trn, 
-                method = "knn", 
-                trControl = ctrl, 
-                preProcess = c("center","scale"),
-                tuneLength = 20)
-knnFit2
-
-confusionMatrix(data = predict(knnFit2, bank_tst), 
-                    reference = bank_tst$y, positive = "no")
-```
-
-```{r, sampling = smote, accuracy}
-set.seed(42)
-ctrl <- trainControl(method="cv",
-                     number = 5, 
-                     sampling = "smote"
-                     #classProbs = TRUE,
-                     #summaryFunction = twoClassSummary
-                     )
-knnFit5 <- train(y ~ ., data = bank_trn, 
-                method = "knn", 
-                trControl = ctrl,
-                preProcess = c("center","scale"),
-                tuneLength = 20)
-knnFit5
-
-
-confusionMatrix(data = predict(knnFit5, bank_tst), 
-                    reference = bank_tst$y, positive = "no")
-```
-
-```{r, no sampling, accuracy}
-set.seed(42)
-ctrl <- trainControl(method="cv",
-                     number = 5
-                     #sampling = "smote"
-                     #classProbs = TRUE,
-                     #summaryFunction = twoClassSummary
-                     )
-knnFit6 <- train(y ~ ., data = bank_trn, 
-                method = "knn", 
-                trControl = ctrl,
-                preProcess = c("center","scale"),
-                tuneLength = 20)
-knnFit6
-
-
-confusionMatrix(data = predict(knnFit6, bank_tst), 
-                    reference = bank_tst$y, positive = "no")
-```
-
+***
