@@ -1,5 +1,5 @@
 ---
-title: "Final Project"
+title: "Top 1 Group Final Project"
 author: "Hao Wang (haow12), Qiuning Ge (qiuning2), Chenhan Xu (chenhan2), and Zhongyu Wu (zhongyu6)"
 date: "`r format(Sys.time(), '%d %B, %Y')`"
 output:
@@ -50,23 +50,17 @@ INTRO
 ## Data
 
 ```{r}
-bank = read.csv("bank-additional.csv")
-```
-
-```{r}
 bank_full = read.csv("bank-additional-full.csv")
-table(bank_full$job)
-table(bank_full$education == "unknown")
-table(bank_full$marital  == "unknown")
-table(bank_full$default  == "unknown")
-table(bank_full$housing  == "unknown")
-table(bank_full$loan  == "unknown")
-table(bank_full$y)
 ```
 
 ```{r}
-bank_new = bank_full %>% 
-  filter(bank_full$job != "unknown" & bank_full$marital != "unknown" & bank_full$education != "unknown" & bank_full$loan != "unknown" & bank_full$housing != "unknown")
+bank_new = bank_full %>%
+  filter(
+    bank_full$job != "unknown" &
+      bank_full$marital != "unknown" &
+      bank_full$education != "unknown" &
+      bank_full$loan != "unknown" & bank_full$housing != "unknown"
+  )
 ```
 
 ```{r}
@@ -137,16 +131,6 @@ See the UCI Machine Learning Repository for additional documentation.
 ## EDA
 
 ```{r}
-bank_num = read.csv("bank-additional.csv")
-bank_num[,] <- sapply(bank[,], as.numeric)
-heatmap(x = as.matrix(bank_num))
-#install.packages("car")
-library(car)
-full_model = lm(y ~ ., data = bank_num)
-vif(full_model)
-```
-
-```{r}
 plot_1 = bank_new %>%
   ggplot(aes(x = age, col = job)) + 
   geom_density()
@@ -209,14 +193,13 @@ plot_13 = bank_new %>%
 gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, plot_8, plot_9, plot_10)
 ```
 
-
 ```{r}
-bank_num = bank
-bank_num[,] <- sapply(bank[,], as.numeric)
+bank_num = bank_full
+bank_num[,] <- sapply(bank_full[,], as.numeric)
 ```
 
 ```{r}
-rf = randomForest(y ~ ., data = bank)
+rf = randomForest(y ~ ., data = bank_full)
 ```
 
 ```{r}
@@ -273,7 +256,7 @@ ggplot() +
 ```{r pca transform}
 pca1 = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
 trans = pca1$rotation[, 1]
-bank = bank %>%
+bank = bank_full %>%
   mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
   select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
 bank_full = bank_full %>%
