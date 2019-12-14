@@ -120,7 +120,6 @@ plot_12 = bank_new %>%
 plot_13 = bank_new %>%
   ggplot(aes(x = euribor3m, y = nr.employed)) +
   geom_point()
->>>>>>> 7e5227dd1fd09b4f069317e67fbf01cd3b0b57ed
 ```
 
 ```{r, print-eda-plots, fig.height = 10, fig.width = 17}
@@ -139,6 +138,10 @@ rf = randomForest(y ~ ., data = bank)
 
 ```{r}
 rf$importance
+```
+
+```{r}
+cor(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
 ```
 
 ```{r pca}
@@ -188,20 +191,13 @@ ggplot() +
   ggtitle("Circle of correlations")
 ```
 
-```{r pca transform}
-pca1 = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
-trans = pca1$rotation[, 1]
+```{r reduce dimension}
 bank = bank %>%
-  mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
-  select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
+  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
 bank_full = bank_full %>%
-  mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
-  select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
+  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
 ```
 
-```{r}
-histogram(bank_full$econ.idx, breaks = 100)
-```
 
 
 
