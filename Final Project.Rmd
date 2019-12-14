@@ -10,7 +10,7 @@ output:
 urlcolor: BrickRed
 ---
 
-```{r, setup, include=FALSE}
+```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE, fig.align = 'center')
 ```
 
@@ -182,11 +182,6 @@ gridExtra::grid.arrange(plot_1, plot_2, plot_3, plot_4, plot_5, plot_6, plot_7, 
 ```
 
 ```{r}
-bank_num = bank_full
-bank_num[,] <- sapply(bank_full[,], as.numeric)
-```
-
-```{r}
 rf = randomForest(y ~ ., data = bank_full)
 ```
 
@@ -298,26 +293,27 @@ cm1 = confusionMatrix(predict(nb1, bank_tst_full, type = "raw"), bank_tst_full$y
 ```
 
 ```{r}
-nb2 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
-                                    classProbs = TRUE,
-                                    summaryFunction = twoClassSummary))
-```
-
-```{r}
-cm2 = confusionMatrix(predict(nb2, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
-```
-
-```{r}
-nb3 = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
-           trControl = trainControl(method = "cv", num = 5, sampling = "up",
+mod_nb = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
+           trControl = trainControl(method = "cv", num = 5,
                                     classProbs = TRUE,
                                     summaryFunction = twoClassSummary),
-           metric = "Spec")
+           metric = "ROC")
 ```
 
 ```{r}
-cm3 = confusionMatrix(predict(nb3, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
+cm_nb = confusionMatrix(predict(mod_nb, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
+```
+
+```{r}
+mod_nb_smote = train(y ~ ., data = bank_trn_full, method = "naive_bayes", tuneLength = 20,
+           trControl = trainControl(method = "cv", num = 5, sampling = "smote",
+                                    classProbs = TRUE,
+                                    summaryFunction = twoClassSummary),
+           metric = "ROC")
+```
+
+```{r}
+cm_nb_smote = confusionMatrix(predict(mod_nb_smote, bank_tst_full, type = "raw"), bank_tst_full$y, positive = "no")
 ```
 
 ```{r}
@@ -366,7 +362,7 @@ cv_binary_up = trainControl(
 
 ```{r, echo = TRUE}
 set.seed(42)
-bin_mod_rf = train(
+rf_mod = train(
   form = y ~ ., 
   data = bank_trn,
   method = "ranger",
@@ -378,7 +374,7 @@ bin_mod_rf = train(
 
 ```{r, echo = TRUE}
 set.seed(42)
-bin_mod_rf_up = train(
+rf_mod_up = train(
   form = y ~ ., 
   data = bank_trn,
   method = "ranger",
@@ -389,13 +385,13 @@ bin_mod_rf_up = train(
 ```
 
 ```{r}
-confusionMatrix(data = predict(bin_mod_rf, bank_tst, type = "raw"),
+confusionMatrix(data = predict(rf_mod, bank_tst, type = "raw"),
                 reference = bank_tst$y,
                 positive = "no")
 ```
 
 ```{r}
-confusionMatrix(data = predict(bin_mod_rf_up, bank_tst, type = "raw"),
+confusionMatrix(data = predict(rf_mod_up, bank_tst, type = "raw"),
                 reference = bank_tst$y,
                 positive = "yes")
 ```
@@ -411,7 +407,7 @@ cv_binary_oob_up = trainControl(
 
 ```{r}
 set.seed(42)
-bin_mod_rf_oob = train(
+rf_mod_oob = train(
   form = y ~ ., 
   data = bank_trn,
   method = "ranger",
@@ -485,7 +481,6 @@ confusionMatrix(data = predict(knnFit2, bank_tst),
                     reference = bank_tst$y, positive = "no")
 ```
 
-
 ```{r, sampling = smote, accuracy}
 set.seed(42)
 ctrl <- trainControl(method="cv",
@@ -505,6 +500,7 @@ knnFit5
 confusionMatrix(data = predict(knnFit5, bank_tst), 
                     reference = bank_tst$y, positive = "no")
 ```
+
 ```{r, no sampling, accuracy}
 set.seed(42)
 ctrl <- trainControl(method="cv",
