@@ -257,15 +257,14 @@ ggplot() +
   ggtitle("Circle of correlations")
 ```
 
-```{r pca transform}
-pca1 = prcomp(bank_full[, c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed")])
-trans = pca1$rotation[, 1]
-bank = bank_full %>%
-  mutate(econ.idx = -(emp.var.rate * trans[1] + cons.price.idx * trans[2] + euribor3m * trans[3] + nr.employed * trans[4])) %>%
-  select(-c("emp.var.rate", "cons.price.idx", "euribor3m", "nr.employed"))
-bank_full = bank_full %>%
+```{r transform}
+bank__new_full = bank_full %>%
+  select(-c("cons.price.idx", "euribor3m", "nr.employed"))
+bank_new = bank %>%
   select(-c("cons.price.idx", "euribor3m", "nr.employed"))
 ```
 
+```{r}
+bank
+```
 
-***
